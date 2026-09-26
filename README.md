@@ -46,26 +46,6 @@ pip install customtkinter pillow
 
 ---
 
-## Cómo Crear el Ejecutable (`.exe`)
-
-Para compilar el programa Python en un archivo ejecutable independiente para Windows, se utiliza **PyInstaller**.
-
-### Pasos para compilar:
-
-1. **Instalar PyInstaller** (si no está instalado):
-   ```bash
-   pip install pyinstaller
-   ```
-
-2. **Generar el ejecutable sin consola auxiliar (modo GUI):**
-   ```bash
-   python -m PyInstaller --onefile --noconsole "main.py"
-   ```
-
-3. **Ubicación del resultado:**
-   El ejecutable compilado se generará dentro de la subcarpeta `dist/main.exe`.
-
-
 ## 💻 Uso de la Aplicación
 
 Ejecuta el archivo principal:
@@ -89,4 +69,32 @@ Para ejecutar las pruebas automáticas del servicio de Git:
 
 ```bash
 python -m unittest test_git_service.py
+```
+
+---
+
+## ⚡ Optimización de Compilación con PyInstaller
+
+Si ejecutas `pyinstaller --onefile`, la aplicación tardará varios segundos en arrancar. Esto se debe a que el modo `--onefile` descomprime todos los componentes, assets de `customtkinter` y librerías en una carpeta temporal (`_MEIxxxxxx`) en el disco **cada vez que se abre el ejecutable**.
+
+### Opciones para Acelerar la Ejecución:
+
+#### 1. Usar el modo directorio `--onedir` (RECOMENDADO para máxima velocidad)
+El modo en directorio no requiere descomprimir archivos al arrancar, por lo que la aplicación **inicia instantáneamente**:
+
+```bash
+pyinstaller --onedir --noconsole --collect-all customtkinter main.py
+```
+*(Genera una carpeta `dist/main/` que contiene el ejecutable `main` y sus dependencias preparadas para ejecución inmediata).*
+
+#### 2. Excluir módulos innecesarios de la compilación
+Si deseas mantener `--onefile`, puedes acelerar la descompresión excluyendo módulos pesados que no se utilizan:
+
+```bash
+pyinstaller --onefile --noconsole --collect-all customtkinter --exclude-module matplotlib --exclude-module numpy --exclude-module scipy --exclude-module pandas main.py
+```
+
+#### 3. Crear ejecutable optimizado con `--onedir` mediante Spec o Script de Compilación
+```bash
+pyinstaller --noconfirm --onedir --windowed --add-data "$(python -c 'import customtkinter; print(customtkinter.__path__[0])'):customtkinter/" main.py
 ```
