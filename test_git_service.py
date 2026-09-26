@@ -60,14 +60,15 @@ class TestGitService(unittest.TestCase):
         status = git_service.get_status(self.temp_dir)
         self.assertEqual(len(status["staged"]), 0)
 
-        # Stage and commit
+        # Stage and commit with subject and description
         git_service.stage_files(self.temp_dir, ["file1.txt"])
-        commit_ok, msg = git_service.create_commit(self.temp_dir, "Initial commit")
+        commit_ok, msg = git_service.create_commit(self.temp_dir, "Initial commit", "Detailed body description")
         self.assertTrue(commit_ok)
 
         history = git_service.get_commit_history(self.temp_dir)
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["message"], "Initial commit")
+        self.assertEqual(history[0]["description"], "Detailed body description")
 
         # Check affected files in commit
         files = git_service.get_commit_files(self.temp_dir, history[0]["hash"])

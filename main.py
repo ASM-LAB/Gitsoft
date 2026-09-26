@@ -152,14 +152,20 @@ class GitGuiApp(ctk.CTk):
         frame_commit.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
         frame_commit.grid_columnconfigure(0, weight=1)
 
-        lbl_commit = ctk.CTkLabel(frame_commit, text="Mensaje del Commit:", font=("Helvetica", 12, "bold"))
-        lbl_commit.grid(row=0, column=0, sticky="w", padx=10, pady=(5, 0))
+        lbl_commit_msg = ctk.CTkLabel(frame_commit, text="Mensaje / Título del Commit (1ª línea):", font=("Helvetica", 12, "bold"))
+        lbl_commit_msg.grid(row=0, column=0, sticky="w", padx=10, pady=(5, 0))
 
-        self.entry_commit_msg = ctk.CTkEntry(frame_commit, placeholder_text="Escribe el mensaje de commit aquí...")
-        self.entry_commit_msg.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        self.entry_commit_msg = ctk.CTkEntry(frame_commit, placeholder_text="Escribe el mensaje/título del commit aquí...")
+        self.entry_commit_msg.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 5))
+
+        lbl_commit_desc = ctk.CTkLabel(frame_commit, text="Descripción detallada (a partir de la 3ª línea):", font=("Helvetica", 12, "bold"))
+        lbl_commit_desc.grid(row=2, column=0, sticky="w", padx=10, pady=(5, 0))
+
+        self.textbox_commit_desc = ctk.CTkTextbox(frame_commit, height=60, font=("Helvetica", 12))
+        self.textbox_commit_desc.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 5))
 
         btn_commit = ctk.CTkButton(frame_commit, text="Crear Commit", font=("Helvetica", 12, "bold"), fg_color="#28a745", hover_color="#1e7e34", command=self.on_create_commit)
-        btn_commit.grid(row=1, column=1, padx=10, pady=5)
+        btn_commit.grid(row=3, column=1, padx=10, pady=5, sticky="se")
 
     def _setup_history_tab(self):
         tab = self.tab_history
@@ -343,13 +349,16 @@ class GitGuiApp(ctk.CTk):
         if not self.current_repo:
             return
         msg = self.entry_commit_msg.get().strip()
+        desc = self.textbox_commit_desc.get("1.0", tk.END).strip()
+
         if not msg:
-            messagebox.showwarning("Atención", "Por favor ingresa un mensaje para el commit.")
+            messagebox.showwarning("Atención", "Por favor ingresa un mensaje/título para el commit.")
             return
 
-        success, err_or_out = git_service.create_commit(self.current_repo, msg)
+        success, err_or_out = git_service.create_commit(self.current_repo, msg, desc)
         if success:
             self.entry_commit_msg.delete(0, tk.END)
+            self.textbox_commit_desc.delete("1.0", tk.END)
             self.refresh_all()
             self.update_status("Commit creado con éxito.")
             messagebox.showinfo("Éxito", "Commit creado exitosamente.")
@@ -371,12 +380,17 @@ class GitGuiApp(ctk.CTk):
         for f in self._current_commit_files:
             self.listbox_commit_files.insert(tk.END, f"[{f['status']}] {f['path']}")
 
-        # Mostrar el diff completo del commit
+        # Mostrar el diff completo del commit discriminando Mensaje y Descripción
         diff = git_service.get_commit_diff(self.current_repo, commit_hash)
-        self.show_diff(f"Commit {commit_hash}\n"
-                       f"Autor: {self._selected_commit['author']}\n"
-                       f"Fecha: {self._selected_commit['date']}\n"
-                       f"Mensaje: {self._selected_commit['message']}\n\n" + diff)
+        header_text = f"Commit {commit_hash}\n" \
+                      f"Autor: {self._selected_commit['author']}\n" \
+                      f"Fecha: {self._selected_commit['date']}\n" \
+                      f"Mensaje: {self._selected_commit['message']}\n"
+
+        if self._selected_commit.get('description'):
+            header_text += f"Descripción: {self._selected_commit['description']}\n"
+
+        self.show_diff(header_text + "\n" + diff)
 
     def on_commit_file_select(self, event):
         selections = self.listbox_commit_files.curselection()
@@ -418,7 +432,7 @@ class GitGuiApp(ctk.CTk):
             self.diff_textbox.insert(tk.END, line)
             line_end = self.diff_textbox.index("insert")
 
-            if line.startswith("Autor:") or line.startswith("Fecha:") or line.startswith("Mensaje:") or line.startswith("Commit ") or line.startswith("Cambios no preparados:") or line.startswith("Cambios preparados"):
+            if line.startswith("Autor:") or line.startswith("Fecha:") or line.startswith("Mensaje:") or line.startswith("Descripción:") or line.startswith("Commit ") or line.startswith("Cambios no preparados:") or line.startswith("Cambios preparados"):
                 internal_textbox.tag_add("diff_bold_meta", line_start, line_end)
             elif line.startswith("+") and not line.startswith("+++"):
                 internal_textbox.tag_add("diff_add", line_start, line_end)

@@ -124,18 +124,30 @@ def discard_changes(repo_path: str, filepaths: List[str]) -> bool:
     res = run_git_command(repo_path, ["checkout", "--"] + filepaths)
     return res.returncode == 0
 
-def create_commit(repo_path: str, message: str) -> tuple[bool, str]:
-    """Crea un commit con el mensaje proporcionado."""
-    if not message.strip():
-        return False, "El mensaje de commit no puede estar vacío."
-    res = run_git_command(repo_path, ["commit", "-m", message])
+def create_commit(repo_path: str, subject: str, description: str = "") -> tuple[bool, str]:
+    """
+    Crea un commit formateando según el estándar Git:
+    Primera línea: Título/Mensaje
+    Segunda línea: En blanco
+    A partir de la tercera línea: Descripción detallada (Body)
+    """
+    subject = subject.strip()
+    if not subject:
+        return False, "El título del commit no puede estar vacío."
+
+    full_message = subject
+    description = description.strip()
+    if description:
+        full_message += f"\n\n{description}"
+
+    res = run_git_command(repo_path, ["commit", "-m", full_message])
     if res.returncode == 0:
         return True, res.stdout.strip()
     return False, res.stderr.strip() or res.stdout.strip()
 
 def get_commit_history(repo_path: str, max_count: int = 30) -> List[Dict[str, Any]]:
-    """Obtiene el historial de últimos commits."""
-    fmt = "%H%x1f%h%x1f%an%x1f%ad%x1f%s"
+    """Obtiene el historial de últimos commits incluyendo título y cuerpo/descripción."""
+    fmt = "%H%x1f%h%x1f%an%x1f%ad%x1f%s%x1f%b%x1e"
     res = run_git_command(
         repo_path,
         ["log", f"-n{max_count}", f"--format={fmt}", "--date=short"]
@@ -144,18 +156,26 @@ def get_commit_history(repo_path: str, max_count: int = 30) -> List[Dict[str, An
     if res.returncode != 0:
         return commits
 
-    for line in res.stdout.splitlines():
-        if not line.strip():
+    raw_commits = res.stdout.split("\x1e")
+    for raw in raw_commits:
+        raw = raw.strip("\n\r")
+        if not raw:
             continue
-        parts = line.split("\x1f")
-        if len(parts) == 5:
-            full_hash, short_hash, author, date, message = parts
+        parts = raw.split("\x1f")
+        if len(parts) >= 5:
+            full_hash = parts[0]
+            short_hash = parts[1]
+            author = parts[2]
+            date = parts[3]
+            message = parts[4]
+            description = parts[5].strip() if len(parts) > 5 else ""
             commits.append({
                 "hash": full_hash,
                 "short_hash": short_hash,
                 "author": author,
                 "date": date,
-                "message": message
+                "message": message,
+                "description": description
             })
     return commits
 
