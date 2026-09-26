@@ -112,7 +112,7 @@ class GitGuiApp(ctk.CTk):
         lbl_unstaged = ctk.CTkLabel(frame_unstaged, text="Archivos Modificados / No seguidos", font=("Helvetica", 13, "bold"))
         lbl_unstaged.grid(row=0, column=0, sticky="w", padx=10, pady=5)
 
-        self.listbox_unstaged = tk.Listbox(frame_unstaged, selectmode=tk.EXTENDED, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0)
+        self.listbox_unstaged = tk.Listbox(frame_unstaged, selectmode=tk.EXTENDED, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0, font=("Helvetica", 12))
         self.listbox_unstaged.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         self.listbox_unstaged.bind("<<ListboxSelect>>", self.on_unstaged_select)
 
@@ -137,7 +137,7 @@ class GitGuiApp(ctk.CTk):
         lbl_staged = ctk.CTkLabel(frame_staged, text="Archivos Preparados (Staged)", font=("Helvetica", 13, "bold"))
         lbl_staged.grid(row=0, column=0, sticky="w", padx=10, pady=5)
 
-        self.listbox_staged = tk.Listbox(frame_staged, selectmode=tk.EXTENDED, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0)
+        self.listbox_staged = tk.Listbox(frame_staged, selectmode=tk.EXTENDED, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0, font=("Helvetica", 12))
         self.listbox_staged.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         self.listbox_staged.bind("<<ListboxSelect>>", self.on_staged_select)
 
@@ -176,7 +176,7 @@ class GitGuiApp(ctk.CTk):
         lbl_history = ctk.CTkLabel(frame_commits, text="Últimos Commits", font=("Helvetica", 13, "bold"))
         lbl_history.grid(row=0, column=0, sticky="w", padx=10, pady=5)
 
-        self.listbox_commits = tk.Listbox(frame_commits, selectmode=tk.SINGLE, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0)
+        self.listbox_commits = tk.Listbox(frame_commits, selectmode=tk.SINGLE, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0, font=("Helvetica", 12))
         self.listbox_commits.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         self.listbox_commits.bind("<<ListboxSelect>>", self.on_commit_select)
 
@@ -189,7 +189,7 @@ class GitGuiApp(ctk.CTk):
         lbl_commit_files = ctk.CTkLabel(frame_commit_files, text="Programas / Archivos Afectados en el Commit", font=("Helvetica", 13, "bold"))
         lbl_commit_files.grid(row=0, column=0, sticky="w", padx=10, pady=5)
 
-        self.listbox_commit_files = tk.Listbox(frame_commit_files, selectmode=tk.SINGLE, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0)
+        self.listbox_commit_files = tk.Listbox(frame_commit_files, selectmode=tk.SINGLE, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0, font=("Helvetica", 12))
         self.listbox_commit_files.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         self.listbox_commit_files.bind("<<ListboxSelect>>", self.on_commit_file_select)
 
@@ -403,7 +403,28 @@ class GitGuiApp(ctk.CTk):
 
     def show_diff(self, text: str):
         self.diff_textbox.delete("1.0", tk.END)
-        self.diff_textbox.insert("1.0", text)
+
+        # Configurar etiquetas de color para el diff
+        self.diff_textbox.tag_config("diff_add", foreground="#28a745")       # Verde para adiciones
+        self.diff_textbox.tag_config("diff_remove", foreground="#dc3545")    # Rojo para eliminaciones
+        self.diff_textbox.tag_config("diff_header", foreground="#17a2b8")    # Cyan para cabeceras @@
+        self.diff_textbox.tag_config("diff_meta", foreground="#ffc107")      # Amarillo para metadatos (diff --git, commit)
+
+        lines = text.splitlines(keepends=True)
+        for line in lines:
+            line_start = self.diff_textbox.index("insert")
+            self.diff_textbox.insert(tk.END, line)
+            line_end = self.diff_textbox.index("insert")
+
+            stripped = line.strip()
+            if line.startswith("+") and not line.startswith("+++"):
+                self.diff_textbox.tag_add("diff_add", line_start, line_end)
+            elif line.startswith("-") and not line.startswith("---"):
+                self.diff_textbox.tag_add("diff_remove", line_start, line_end)
+            elif line.startswith("@@"):
+                self.diff_textbox.tag_add("diff_header", line_start, line_end)
+            elif line.startswith("diff --git") or line.startswith("commit ") or line.startswith("Autor:") or line.startswith("Fecha:"):
+                self.diff_textbox.tag_add("diff_meta", line_start, line_end)
 
 if __name__ == "__main__":
     app = GitGuiApp()
