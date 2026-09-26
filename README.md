@@ -46,6 +46,26 @@ pip install customtkinter pillow
 
 ---
 
+## Cómo Crear el Ejecutable (`.exe`)
+
+Para compilar el programa Python en un archivo ejecutable independiente para Windows, se utiliza **PyInstaller**.
+
+### Pasos para compilar:
+
+1. **Instalar PyInstaller** (si no está instalado):
+   ```bash
+   pip install pyinstaller
+   ```
+
+2. **Generar el ejecutable sin consola auxiliar (modo GUI):**
+   ```bash
+   python -m PyInstaller --onefile --noconsole "main.py"
+   ```
+
+3. **Ubicación del resultado:**
+   El ejecutable compilado se generará dentro de la subcarpeta `dist/main.exe`.
+
+
 ## 💻 Uso de la Aplicación
 
 Ejecuta el archivo principal:
