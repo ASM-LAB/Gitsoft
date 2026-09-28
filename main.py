@@ -1,242 +1,308 @@
+import sys
 import os
-import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog
-import customtkinter as ctk
 from typing import Optional, List, Dict
+
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QFont, QColor, QTextCharFormat, QSyntaxHighlighter, QPalette
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QTabWidget, QListWidget, QListWidgetItem, QPushButton, QComboBox,
+    QLabel, QLineEdit, QTextEdit, QSplitter, QMessageBox, QFileDialog,
+    QFrame, QStatusBar, QGroupBox
+)
 
 import git_service
 
-ctk.set_appearance_mode("System")
-ctk.set_default_color_theme("blue")
 
-class GitGuiApp(ctk.CTk):
+class DiffHighlighter(QSyntaxHighlighter):
+    """Sintaxis de colores y negritas para el visor de Diff."""
+    def __init__(self, document):
+        super().__init__(document)
+
+        # Formatos
+        self.fmt_bold_header = QTextCharFormat()
+        self.fmt_bold_header.setForeground(QColor("#e0a800"))  # Amarillo
+        self.fmt_bold_header.setFontWeight(QFont.Bold)
+        self.fmt_bold_header.setFontPointSize(11)
+
+        self.fmt_add = QTextCharFormat()
+        self.fmt_add.setForeground(QColor("#28a745"))  # Verde
+
+        self.fmt_remove = QTextCharFormat()
+        self.fmt_remove.setForeground(QColor("#dc3545"))  # Rojo
+
+        self.fmt_hunk = QTextCharFormat()
+        self.fmt_hunk.setForeground(QColor("#17a2b8"))  # Cyan
+
+        self.fmt_meta = QTextCharFormat()
+        self.fmt_meta.setForeground(QColor("#888888"))  # Gris
+
+    def highlightBlock(self, text: str):
+        if (text.startswith("Commit ") or text.startswith("Autor:") or
+            text.startswith("Fecha:") or text.startswith("Mensaje:") or
+            text.startswith("Descripción:") or text.startswith("Cambios no preparados:") or
+            text.startswith("Cambios preparados")):
+            self.setFormat(0, len(text), self.fmt_bold_header)
+        elif text.startswith("+") and not text.startswith("+++"):
+            self.setFormat(0, len(text), self.fmt_add)
+        elif text.startswith("-") and not text.startswith("---"):
+            self.setFormat(0, len(text), self.fmt_remove)
+        elif text.startswith("@@"):
+            self.setFormat(0, len(text), self.fmt_hunk)
+        elif (text.startswith("diff --git") or text.startswith("index ") or
+              text.startswith("---") or text.startswith("+++")):
+            self.setFormat(0, len(text), self.fmt_meta)
+
+
+class GitGuiPySideApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.title("Gestor de Repositorio Git")
-        self.geometry("1100x700")
-        self.minsize(900, 600)
+        self.setWindowTitle("Gestor de Repositorio Git (PySide6 + PyGit2)")
+        self.resize(1150, 720)
+        self.setMinimumSize(950, 600)
 
         self.current_repo: Optional[str] = None
         self.recent_repos: List[str] = git_service.load_recent_repos()
 
-        # Configurar grid principal (Header, Main view, Statusbar)
-        self.grid_rowconfigure(0, weight=0)  # Top Bar
-        self.grid_rowconfigure(1, weight=1)  # Main Content
-        self.grid_rowconfigure(2, weight=0)  # Status Bar
-        self.grid_columnconfigure(0, weight=1)
+        self._apply_dark_theme()
+        self._init_ui()
 
-        self._create_top_bar()
-        self._create_main_content()
-        self._create_status_bar()
-
-        # Seleccionar por defecto el repo actual o el primero de la lista reciente si existe
+        # Cargar directorio por defecto
         default_dir = os.getcwd()
         if git_service.is_git_repo(default_dir):
             self.set_repository(default_dir)
         elif self.recent_repos:
             self.set_repository(self.recent_repos[0])
         else:
-            self.update_status("Por favor, selecciona un repositorio Git para comenzar.")
+            self.statusBar().showMessage("Por favor, selecciona un repositorio Git para comenzar.")
 
-    def _create_top_bar(self):
-        self.top_frame = ctk.CTkFrame(self, corner_radius=0)
-        self.top_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
-        self.top_frame.grid_columnconfigure(2, weight=1)
+    def _apply_dark_theme(self):
+        """Aplica un tema oscuro moderno con tipografía clara y legible."""
+        app = QApplication.instance()
+        app.setStyle("Fusion")
 
-        btn_select = ctk.CTkButton(
-            self.top_frame, text="Abrir Repositorio", command=self.on_select_repository
-        )
-        btn_select.grid(row=0, column=0, padx=10, pady=10)
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor("#1e1e1e"))
+        palette.setColor(QPalette.WindowText, QColor("#ffffff"))
+        palette.setColor(QPalette.Base, QColor("#252526"))
+        palette.setColor(QPalette.AlternateBase, QColor("#2d2d30"))
+        palette.setColor(QPalette.ToolTipBase, QColor("#ffffff"))
+        palette.setColor(QPalette.ToolTipText, QColor("#ffffff"))
+        palette.setColor(QPalette.Text, QColor("#f1f1f1"))
+        palette.setColor(QPalette.Button, QColor("#333333"))
+        palette.setColor(QPalette.ButtonText, QColor("#ffffff"))
+        palette.setColor(QPalette.BrightText, QColor("#ff0000"))
+        palette.setColor(QPalette.Link, QColor("#007acc"))
+        palette.setColor(QPalette.Highlight, QColor("#0e639c"))
+        palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
 
-        label_recent = ctk.CTkLabel(self.top_frame, text="Recientes:")
-        label_recent.grid(row=0, column=1, padx=(5, 5), pady=10)
+        app.setPalette(palette)
 
-        self.combo_recent = ctk.CTkOptionMenu(
-            self.top_frame,
-            values=self.recent_repos if self.recent_repos else ["Ninguno"],
-            command=self.on_recent_selected
-        )
-        self.combo_recent.grid(row=0, column=2, sticky="ew", padx=5, pady=10)
+        # Hoja de estilos global (CSS)
+        self.setStyleSheet("""
+            QMainWindow { background-color: #1e1e1e; }
+            QTabWidget::pane { border: 1px solid #3c3c3c; background-color: #252526; }
+            QTabBar::tab { background: #2d2d30; color: #cccccc; padding: 8px 16px; font-size: 13px; font-weight: bold; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+            QTabBar::tab:selected { background: #1e1e1e; color: #ffffff; border-bottom: 2px solid #007acc; }
+            QListWidget { font-family: 'Segoe UI', 'Helvetica', sans-serif; font-size: 14pt; border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px; }
+            QListWidget::item { padding: 6px; border-bottom: 1px solid #2d2d30; }
+            QListWidget::item:hover { background-color: #2a2d2e; }
+            QListWidget::item:selected { background-color: #0e639c; color: white; }
+            QPushButton { background-color: #0e639c; color: white; font-size: 13px; font-weight: bold; border-radius: 4px; padding: 6px 14px; }
+            QPushButton:hover { background-color: #1177bb; }
+            QPushButton:pressed { background-color: #094771; }
+            QPushButton#btnDiscard { background-color: #a83232; }
+            QPushButton#btnDiscard:hover { background-color: #c93b3b; }
+            QPushButton#btnCommit { background-color: #28a745; font-size: 14px; }
+            QPushButton#btnCommit:hover { background-color: #34ce57; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #252526; color: #ffffff; border: 1px solid #3c3c3c; border-radius: 4px; padding: 6px; font-size: 13px; }
+            QGroupBox { font-weight: bold; font-size: 13px; border: 1px solid #3c3c3c; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #007acc; }
+        """)
 
-        btn_refresh = ctk.CTkButton(
-            self.top_frame, text="Actualizar", width=100, command=self.refresh_all
-        )
-        btn_refresh.grid(row=0, column=3, padx=10, pady=10)
+    def _init_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
-    def _create_main_content(self):
-        # Frame contenedor central con PanedWindow para dividir la vista principal y el panel lateral de diff
-        self.main_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.main_container.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-        self.main_container.grid_rowconfigure(0, weight=1)
-        self.main_container.grid_columnconfigure(0, weight=3)
-        self.main_container.grid_columnconfigure(1, weight=2)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(8)
 
-        # Tabs a la izquierda
-        self.tabview = ctk.CTkTabview(self.main_container)
-        self.tabview.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        # 1. Barra Superior (Top Bar)
+        top_layout = QHBoxLayout()
 
-        self.tab_workspace = self.tabview.add("Área de Trabajo")
-        self.tab_history = self.tabview.add("Historial de Commits")
-        self.tab_gitignore = self.tabview.add(".gitignore")
+        btn_open = QPushButton("Abrir Repositorio")
+        btn_open.clicked.connect(self.on_select_repository)
+        top_layout.addWidget(btn_open)
 
-        self._setup_workspace_tab()
-        self._setup_history_tab()
-        self._setup_gitignore_tab()
+        lbl_recent = QLabel("Recientes:")
+        lbl_recent.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        top_layout.addWidget(lbl_recent)
 
-        # Panel lateral de Diff a la derecha
-        self.diff_frame = ctk.CTkFrame(self.main_container)
-        self.diff_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.diff_frame.grid_rowconfigure(1, weight=1)
-        self.diff_frame.grid_columnconfigure(0, weight=1)
+        self.combo_recent = QComboBox()
+        self.combo_recent.addItems(self.recent_repos if self.recent_repos else ["Ninguno"])
+        self.combo_recent.currentTextChanged.connect(self.on_recent_selected)
+        top_layout.addWidget(self.combo_recent, stretch=1)
 
-        diff_title = ctk.CTkLabel(self.diff_frame, text="Vista Previa de Cambios (Diff)", font=("Helvetica", 14, "bold"))
-        diff_title.grid(row=0, column=0, sticky="w", padx=10, pady=10)
+        btn_refresh = QPushButton("Actualizar")
+        btn_refresh.clicked.connect(self.refresh_all)
+        top_layout.addWidget(btn_refresh)
 
-        self.diff_textbox = ctk.CTkTextbox(self.diff_frame, font=("Courier", 12), wrap="none")
-        self.diff_textbox.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        main_layout.addLayout(top_layout)
 
-    def _setup_workspace_tab(self):
-        tab = self.tab_workspace
-        tab.grid_rowconfigure(0, weight=1)
-        tab.grid_rowconfigure(1, weight=0)
-        tab.grid_columnconfigure(0, weight=1)
-        tab.grid_columnconfigure(1, weight=1)
+        # 2. Layout Central con Splitter (Izquierda: Pestañas, Derecha: Diff Viewer)
+        splitter = QSplitter(Qt.Horizontal)
+        main_layout.addWidget(splitter, stretch=1)
 
-        # Seccion de Archivos Modificados / No preparados
-        frame_unstaged = ctk.CTkFrame(tab)
-        frame_unstaged.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        frame_unstaged.grid_rowconfigure(1, weight=1)
-        frame_unstaged.grid_columnconfigure(0, weight=1)
+        # Contenedor Izquierdo (Pestañas)
+        self.tabs_widget = QTabWidget()
+        splitter.addWidget(self.tabs_widget)
 
-        lbl_unstaged = ctk.CTkLabel(frame_unstaged, text="Archivos Modificados / No seguidos", font=("Helvetica", 13, "bold"))
-        lbl_unstaged.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        # Pestaña 1: Área de Trabajo
+        workspace_tab = QWidget()
+        ws_layout = QVBoxLayout(workspace_tab)
 
-        self.listbox_unstaged = tk.Listbox(frame_unstaged, selectmode=tk.EXTENDED, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0, font=("Helvetica", 14))
-        self.listbox_unstaged.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-        self.listbox_unstaged.bind("<<ListboxSelect>>", self.on_unstaged_select)
+        lists_layout = QHBoxLayout()
 
-        btn_box_unstaged = ctk.CTkFrame(frame_unstaged, fg_color="transparent")
-        btn_box_unstaged.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+        # Modificados / No seguidos
+        group_unstaged = QGroupBox("Archivos Modificados / No seguidos")
+        layout_u = QVBoxLayout(group_unstaged)
+        self.list_unstaged = QListWidget()
+        self.list_unstaged.setSelectionMode(QListWidget.ExtendedSelection)
+        self.list_unstaged.itemSelectionChanged.connect(self.on_unstaged_select)
+        layout_u.addWidget(self.list_unstaged)
 
-        btn_stage = ctk.CTkButton(btn_box_unstaged, text="Preparar (Stage)", command=self.on_stage_selected)
-        btn_stage.pack(side="left", padx=2)
+        u_btn_layout = QHBoxLayout()
+        btn_stage = QPushButton("Preparar (Stage)")
+        btn_stage.clicked.connect(self.on_stage_selected)
+        u_btn_layout.addWidget(btn_stage)
 
-        btn_discard = ctk.CTkButton(btn_box_unstaged, text="Descartar", fg_color="#a83232", hover_color="#782323", command=self.on_discard_selected)
-        btn_discard.pack(side="left", padx=2)
+        btn_discard = QPushButton("Descartar")
+        btn_discard.setObjectName("btnDiscard")
+        btn_discard.clicked.connect(self.on_discard_selected)
+        u_btn_layout.addWidget(btn_discard)
 
-        btn_add_ignore = ctk.CTkButton(btn_box_unstaged, text="+ .gitignore", fg_color="#555555", hover_color="#333333", command=self.on_add_to_gitignore_selected)
-        btn_add_ignore.pack(side="left", padx=2)
+        btn_ignore = QPushButton("+ .gitignore")
+        btn_ignore.setStyleSheet("background-color: #555555;")
+        btn_ignore.clicked.connect(self.on_add_to_gitignore_selected)
+        u_btn_layout.addWidget(btn_ignore)
 
-        # Seccion de Archivos Preparados (Staged)
-        frame_staged = ctk.CTkFrame(tab)
-        frame_staged.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        frame_staged.grid_rowconfigure(1, weight=1)
-        frame_staged.grid_columnconfigure(0, weight=1)
+        layout_u.addLayout(u_btn_layout)
+        lists_layout.addWidget(group_unstaged)
 
-        lbl_staged = ctk.CTkLabel(frame_staged, text="Archivos Preparados (Staged)", font=("Helvetica", 13, "bold"))
-        lbl_staged.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        # Staged
+        group_staged = QGroupBox("Archivos Preparados (Staged)")
+        layout_s = QVBoxLayout(group_staged)
+        self.list_staged = QListWidget()
+        self.list_staged.setSelectionMode(QListWidget.ExtendedSelection)
+        self.list_staged.itemSelectionChanged.connect(self.on_staged_select)
+        layout_s.addWidget(self.list_staged)
 
-        self.listbox_staged = tk.Listbox(frame_staged, selectmode=tk.EXTENDED, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0, font=("Helvetica", 14))
-        self.listbox_staged.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-        self.listbox_staged.bind("<<ListboxSelect>>", self.on_staged_select)
+        s_btn_layout = QHBoxLayout()
+        btn_unstage = QPushButton("Despreparar (Unstage)")
+        btn_unstage.clicked.connect(self.on_unstage_selected)
+        s_btn_layout.addWidget(btn_unstage)
 
-        btn_box_staged = ctk.CTkFrame(frame_staged, fg_color="transparent")
-        btn_box_staged.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+        layout_s.addLayout(s_btn_layout)
+        lists_layout.addWidget(group_staged)
 
-        btn_unstage = ctk.CTkButton(btn_box_staged, text="Despreparar (Unstage)", command=self.on_unstage_selected)
-        btn_unstage.pack(side="left", padx=2)
+        ws_layout.addLayout(lists_layout, stretch=1)
 
         # Sección para Crear Commit
-        frame_commit = ctk.CTkFrame(tab)
-        frame_commit.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
-        frame_commit.grid_columnconfigure(0, weight=1)
+        group_commit = QGroupBox("Crear Commit")
+        commit_layout = QVBoxLayout(group_commit)
 
-        lbl_commit_msg = ctk.CTkLabel(frame_commit, text="Mensaje / Título del Commit (1ª línea):", font=("Helvetica", 12, "bold"))
-        lbl_commit_msg.grid(row=0, column=0, sticky="w", padx=10, pady=(5, 0))
+        lbl_c_msg = QLabel("Mensaje / Título (1ª línea):")
+        commit_layout.addWidget(lbl_c_msg)
+        self.input_commit_msg = QLineEdit()
+        self.input_commit_msg.setPlaceholder_text = "Escribe el título corto del commit..."
+        commit_layout.addWidget(self.input_commit_msg)
 
-        self.entry_commit_msg = ctk.CTkEntry(frame_commit, placeholder_text="Escribe el mensaje/título del commit aquí...")
-        self.entry_commit_msg.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 5))
+        lbl_c_desc = QLabel("Descripción detallada (a partir de la 3ª línea):")
+        commit_layout.addWidget(lbl_c_desc)
+        self.input_commit_desc = QTextEdit()
+        self.input_commit_desc.setMaximumHeight(70)
+        commit_layout.addWidget(self.input_commit_desc)
 
-        lbl_commit_desc = ctk.CTkLabel(frame_commit, text="Descripción detallada (a partir de la 3ª línea):", font=("Helvetica", 12, "bold"))
-        lbl_commit_desc.grid(row=2, column=0, sticky="w", padx=10, pady=(5, 0))
+        btn_commit = QPushButton("Crear Commit")
+        btn_commit.setObjectName("btnCommit")
+        btn_commit.clicked.connect(self.on_create_commit)
+        commit_layout.addWidget(btn_commit, alignment=Qt.AlignRight)
 
-        self.textbox_commit_desc = ctk.CTkTextbox(frame_commit, height=60, font=("Helvetica", 12))
-        self.textbox_commit_desc.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 5))
+        ws_layout.addWidget(group_commit)
 
-        btn_commit = ctk.CTkButton(frame_commit, text="Crear Commit", font=("Helvetica", 12, "bold"), fg_color="#28a745", hover_color="#1e7e34", command=self.on_create_commit)
-        btn_commit.grid(row=3, column=1, padx=10, pady=5, sticky="se")
+        self.tabs_widget.addTab(workspace_tab, "Área de Trabajo")
 
-    def _setup_history_tab(self):
-        tab = self.tab_history
-        tab.grid_rowconfigure(0, weight=1)
-        tab.grid_rowconfigure(1, weight=1)
-        tab.grid_columnconfigure(0, weight=1)
+        # Pestaña 2: Historial de Commits
+        history_tab = QWidget()
+        hist_layout = QVBoxLayout(history_tab)
 
-        # Lista de commits
-        frame_commits = ctk.CTkFrame(tab)
-        frame_commits.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        frame_commits.grid_rowconfigure(1, weight=1)
-        frame_commits.grid_columnconfigure(0, weight=1)
+        group_commits = QGroupBox("Últimos Commits")
+        c_layout = QVBoxLayout(group_commits)
+        self.list_commits = QListWidget()
+        self.list_commits.itemSelectionChanged.connect(self.on_commit_select)
+        c_layout.addWidget(self.list_commits)
+        hist_layout.addWidget(group_commits, stretch=1)
 
-        lbl_history = ctk.CTkLabel(frame_commits, text="Últimos Commits", font=("Helvetica", 13, "bold"))
-        lbl_history.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        group_commit_files = QGroupBox("Programas / Archivos Afectados")
+        f_layout = QVBoxLayout(group_commit_files)
+        self.list_commit_files = QListWidget()
+        self.list_commit_files.itemSelectionChanged.connect(self.on_commit_file_select)
+        f_layout.addWidget(self.list_commit_files)
+        hist_layout.addWidget(group_commit_files, stretch=1)
 
-        self.listbox_commits = tk.Listbox(frame_commits, selectmode=tk.SINGLE, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0, font=("Helvetica", 14))
-        self.listbox_commits.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-        self.listbox_commits.bind("<<ListboxSelect>>", self.on_commit_select)
+        self.tabs_widget.addTab(history_tab, "Historial de Commits")
 
-        # Archivos del commit seleccionado
-        frame_commit_files = ctk.CTkFrame(tab)
-        frame_commit_files.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-        frame_commit_files.grid_rowconfigure(1, weight=1)
-        frame_commit_files.grid_columnconfigure(0, weight=1)
+        # Pestaña 3: .gitignore
+        gitignore_tab = QWidget()
+        gi_layout = QVBoxLayout(gitignore_tab)
+        gi_layout.addWidget(QLabel("Editar .gitignore:"))
+        self.input_gitignore = QTextEdit()
+        self.input_gitignore.setFont(QFont("Consolas", 11))
+        gi_layout.addWidget(self.input_gitignore)
+        btn_save_gi = QPushButton("Guardar .gitignore")
+        btn_save_gi.clicked.connect(self.on_save_gitignore)
+        gi_layout.addWidget(btn_save_gi, alignment=Qt.AlignRight)
 
-        lbl_commit_files = ctk.CTkLabel(frame_commit_files, text="Programas / Archivos Afectados en el Commit", font=("Helvetica", 13, "bold"))
-        lbl_commit_files.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        self.tabs_widget.addTab(gitignore_tab, ".gitignore")
 
-        self.listbox_commit_files = tk.Listbox(frame_commit_files, selectmode=tk.SINGLE, bg="#2b2b2b", fg="#ffffff", selectbackground="#1f538d", highlightthickness=0, font=("Helvetica", 14))
-        self.listbox_commit_files.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-        self.listbox_commit_files.bind("<<ListboxSelect>>", self.on_commit_file_select)
+        # Contenedor Derecho (Diff Preview Panel)
+        diff_group = QGroupBox("Vista Previa de Cambios (Diff)")
+        diff_layout = QVBoxLayout(diff_group)
+        self.txt_diff = QTextEdit()
+        self.txt_diff.setReadOnly(True)
+        self.txt_diff.setFont(QFont("Consolas", 11))
+        self.txt_diff.setLineWrapMode(QTextEdit.NoWrap)
+        self.diff_highlighter = DiffHighlighter(self.txt_diff.document())
+        diff_layout.addWidget(self.txt_diff)
 
-    def _setup_gitignore_tab(self):
-        tab = self.tab_gitignore
-        tab.grid_rowconfigure(1, weight=1)
-        tab.grid_columnconfigure(0, weight=1)
+        splitter.addWidget(diff_group)
+        splitter.setSizes([600, 500])
 
-        lbl_info = ctk.CTkLabel(tab, text="Editar .gitignore del repositorio:", font=("Helvetica", 13, "bold"))
-        lbl_info.grid(row=0, column=0, sticky="w", padx=10, pady=5)
-
-        self.gitignore_textbox = ctk.CTkTextbox(tab, font=("Courier", 12))
-        self.gitignore_textbox.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-
-        btn_save_gi = ctk.CTkButton(tab, text="Guardar .gitignore", command=self.on_save_gitignore)
-        btn_save_gi.grid(row=2, column=0, sticky="e", padx=10, pady=10)
-
-    def _create_status_bar(self):
-        self.status_label = ctk.CTkLabel(self, text="Listo", anchor="w", font=("Helvetica", 11))
-        self.status_label.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 5))
-
-    def update_status(self, msg: str):
-        self.status_label.configure(text=msg)
+        # Status Bar
+        self.setStatusBar(QStatusBar())
 
     def set_repository(self, repo_path: str):
         if not git_service.is_git_repo(repo_path):
-            messagebox.showerror("Error", f"La carpeta '{repo_path}' no es un repositorio Git válido.")
+            QMessageBox.critical(self, "Error", f"La carpeta '{repo_path}' no es un repositorio Git válido.")
             return
 
         self.current_repo = repo_path
-        self.title(f"Gestor de Repositorio Git - {os.path.basename(repo_path)} ({repo_path})")
+        self.setWindowTitle(f"Gestor de Repositorio Git - {os.path.basename(repo_path)} ({repo_path})")
         self.recent_repos = git_service.save_recent_repo(repo_path)
 
-        self.combo_recent.configure(values=self.recent_repos)
-        self.combo_recent.set(repo_path)
+        self.combo_recent.blockSignals(True)
+        self.combo_recent.clear()
+        self.combo_recent.addItems(self.recent_repos)
+        self.combo_recent.setCurrentText(repo_path)
+        self.combo_recent.blockSignals(False)
 
         self.refresh_all()
-        self.update_status(f"Repositorio cargado: {repo_path}")
+        self.statusBar().showMessage(f"Repositorio cargado: {repo_path}")
 
     def on_select_repository(self):
-        selected_dir = filedialog.askdirectory(title="Seleccionar Repositorio Git")
+        selected_dir = QFileDialog.getExistingDirectory(self, "Seleccionar Repositorio Git")
         if selected_dir:
             self.set_repository(selected_dir)
 
@@ -252,135 +318,130 @@ class GitGuiApp(ctk.CTk):
         self.refresh_gitignore()
 
     def refresh_status(self):
-        self.listbox_unstaged.delete(0, tk.END)
-        self.listbox_staged.delete(0, tk.END)
+        self.list_unstaged.clear()
+        self.list_staged.clear()
 
         status = git_service.get_status(self.current_repo)
-
         self._unstaged_data = status["unstaged"] + status["untracked"]
         for item in self._unstaged_data:
-            self.listbox_unstaged.insert(tk.END, f"[{item['status']}] {item['path']}")
+            self.list_unstaged.addItem(f"[{item['status']}] {item['path']}")
 
         self._staged_data = status["staged"]
         for item in self._staged_data:
-            self.listbox_staged.insert(tk.END, f"[{item['status']}] {item['path']}")
+            self.list_staged.addItem(f"[{item['status']}] {item['path']}")
 
     def refresh_history(self):
-        self.listbox_commits.delete(0, tk.END)
-        self.listbox_commit_files.delete(0, tk.END)
+        self.list_commits.clear()
+        self.list_commit_files.clear()
 
         self._commits_data = git_service.get_commit_history(self.current_repo)
         for commit in self._commits_data:
             line = f"{commit['short_hash']} - {commit['date']} | {commit['message']} ({commit['author']})"
-            self.listbox_commits.insert(tk.END, line)
+            self.list_commits.addItem(line)
 
     def refresh_gitignore(self):
         content = git_service.get_gitignore_content(self.current_repo)
-        self.gitignore_textbox.delete("1.0", tk.END)
-        self.gitignore_textbox.insert("1.0", content)
+        self.input_gitignore.setPlainText(content)
 
-    # Handlers para área de trabajo
-    def on_unstaged_select(self, event):
-        selections = self.listbox_unstaged.curselection()
-        if not selections or not self.current_repo:
+    def on_unstaged_select(self):
+        indexes = [item.row() for item in self.list_unstaged.selectedIndexes()]
+        if not indexes or not self.current_repo:
             return
-        idx = selections[0]
+        idx = indexes[0]
         if idx < len(self._unstaged_data):
             filepath = self._unstaged_data[idx]["path"]
             diff = git_service.get_file_diff(self.current_repo, filepath, staged=False)
-            self.show_diff(f"Cambios no preparados: {filepath}\n\n" + diff)
+            self.txt_diff.setPlainText(f"Cambios no preparados: {filepath}\n\n" + diff)
 
-    def on_staged_select(self, event):
-        selections = self.listbox_staged.curselection()
-        if not selections or not self.current_repo:
+    def on_staged_select(self):
+        indexes = [item.row() for item in self.list_staged.selectedIndexes()]
+        if not indexes or not self.current_repo:
             return
-        idx = selections[0]
+        idx = indexes[0]
         if idx < len(self._staged_data):
             filepath = self._staged_data[idx]["path"]
             diff = git_service.get_file_diff(self.current_repo, filepath, staged=True)
-            self.show_diff(f"Cambios preparados (Staged): {filepath}\n\n" + diff)
+            self.txt_diff.setPlainText(f"Cambios preparados: {filepath}\n\n" + diff)
 
     def on_stage_selected(self):
-        selections = self.listbox_unstaged.curselection()
-        if not selections or not self.current_repo:
+        indexes = [item.row() for item in self.list_unstaged.selectedIndexes()]
+        if not indexes or not self.current_repo:
             return
-        files_to_stage = [self._unstaged_data[i]["path"] for i in selections]
+        files_to_stage = [self._unstaged_data[i]["path"] for i in indexes]
         if git_service.stage_files(self.current_repo, files_to_stage):
             self.refresh_status()
-            self.update_status(f"Archivos añadidos a Stage: {len(files_to_stage)}")
-        else:
-            messagebox.showerror("Error", "Ocurrió un error al agregar archivos al Stage.")
+            self.statusBar().showMessage(f"Archivos añadidos a Stage: {len(files_to_stage)}")
 
     def on_unstage_selected(self):
-        selections = self.listbox_staged.curselection()
-        if not selections or not self.current_repo:
+        indexes = [item.row() for item in self.list_staged.selectedIndexes()]
+        if not indexes or not self.current_repo:
             return
-        files_to_unstage = [self._staged_data[i]["path"] for i in selections]
+        files_to_unstage = [self._staged_data[i]["path"] for i in indexes]
         if git_service.unstage_files(self.current_repo, files_to_unstage):
             self.refresh_status()
-            self.update_status(f"Archivos removidos de Stage: {len(files_to_unstage)}")
-        else:
-            messagebox.showerror("Error", "Ocurrió un error al quitar archivos del Stage.")
+            self.statusBar().showMessage(f"Archivos removidos de Stage: {len(files_to_unstage)}")
 
     def on_discard_selected(self):
-        selections = self.listbox_unstaged.curselection()
-        if not selections or not self.current_repo:
+        indexes = [item.row() for item in self.list_unstaged.selectedIndexes()]
+        if not indexes or not self.current_repo:
             return
-        files_to_discard = [self._unstaged_data[i]["path"] for i in selections]
-        if messagebox.askyesno("Confirmar", f"¿Estás seguro de descartar cambios en {len(files_to_discard)} archivo(s)? Esta acción no se puede deshacer."):
+        files_to_discard = [self._unstaged_data[i]["path"] for i in indexes]
+        res = QMessageBox.question(
+            self, "Confirmar",
+            f"¿Descartar cambios en {len(files_to_discard)} archivo(s)? Esta acción es irreversible.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if res == QMessageBox.Yes:
             if git_service.discard_changes(self.current_repo, files_to_discard):
                 self.refresh_status()
-                self.update_status("Cambios descartados.")
-            else:
-                messagebox.showerror("Error", "Ocurrió un error al descartar cambios.")
+                self.statusBar().showMessage("Cambios descartados.")
 
     def on_add_to_gitignore_selected(self):
-        selections = self.listbox_unstaged.curselection()
-        if not selections or not self.current_repo:
+        indexes = [item.row() for item in self.list_unstaged.selectedIndexes()]
+        if not indexes or not self.current_repo:
             return
-        for i in selections:
+        for i in indexes:
             pattern = self._unstaged_data[i]["path"]
             git_service.add_to_gitignore(self.current_repo, pattern)
         self.refresh_status()
         self.refresh_gitignore()
-        self.update_status("Archivos añadidos a .gitignore")
+        self.statusBar().showMessage("Añadido a .gitignore.")
 
     def on_create_commit(self):
         if not self.current_repo:
             return
-        msg = self.entry_commit_msg.get().strip()
-        desc = self.textbox_commit_desc.get("1.0", tk.END).strip()
+        msg = self.input_commit_msg.text().strip()
+        desc = self.input_commit_desc.toPlainText().strip()
 
         if not msg:
-            messagebox.showwarning("Atención", "Por favor ingresa un mensaje/título para el commit.")
+            QMessageBox.warning(self, "Atención", "Por favor ingresa un título para el commit.")
             return
 
-        success, err_or_out = git_service.create_commit(self.current_repo, msg, desc)
+        success, err_or_id = git_service.create_commit(self.current_repo, msg, desc)
         if success:
-            self.entry_commit_msg.delete(0, tk.END)
-            self.textbox_commit_desc.delete("1.0", tk.END)
+            self.input_commit_msg.clear()
+            self.input_commit_desc.clear()
             self.refresh_all()
-            self.update_status("Commit creado con éxito.")
-            messagebox.showinfo("Éxito", "Commit creado exitosamente.")
+            self.statusBar().showMessage("Commit creado con éxito.")
+            QMessageBox.information(self, "Éxito", f"Commit creado exitosamente.\nID: {err_or_id[:7]}")
         else:
-            messagebox.showerror("Error de Commit", f"No se pudo crear el commit:\n{err_or_out}")
+            QMessageBox.critical(self, "Error de Commit", f"No se pudo crear el commit:\n{err_or_id}")
 
-    # Handlers para Historial
-    def on_commit_select(self, event):
-        selections = self.listbox_commits.curselection()
-        if not selections or not self.current_repo:
+    def on_commit_select(self):
+        indexes = [item.row() for item in self.list_commits.selectedIndexes()]
+        if not indexes or not self.current_repo:
             return
-        idx = selections[0]
+        idx = indexes[0]
         self._selected_commit = self._commits_data[idx]
         commit_hash = self._selected_commit["hash"]
 
-        # Cargar archivos afectados en este commit
+        # Cargar archivos afectados de forma ultra rápida
         self._current_commit_files = git_service.get_commit_files(self.current_repo, commit_hash)
-        self.listbox_commit_files.delete(0, tk.END)
+        self.list_commit_files.clear()
         for f in self._current_commit_files:
-            self.listbox_commit_files.insert(tk.END, f"[{f['status']}] {f['path']}")
+            self.list_commit_files.addItem(f"[{f['status']}] {f['path']}")
 
-        # Mostrar el diff completo del commit discriminando Mensaje y Descripción
+        # Formatear la consulta sin duplicación de información
         diff = git_service.get_commit_diff(self.current_repo, commit_hash)
         header_text = f"Commit {commit_hash}\n" \
                       f"Autor: {self._selected_commit['author']}\n" \
@@ -390,59 +451,33 @@ class GitGuiApp(ctk.CTk):
         if self._selected_commit.get('description'):
             header_text += f"Descripción: {self._selected_commit['description']}\n"
 
-        self.show_diff(header_text + "\n" + diff)
+        self.txt_diff.setPlainText(header_text + "\n" + diff)
 
-    def on_commit_file_select(self, event):
-        selections = self.listbox_commit_files.curselection()
-        if not selections or not self.current_repo or not hasattr(self, "_selected_commit"):
+    def on_commit_file_select(self):
+        indexes = [item.row() for item in self.list_commit_files.selectedIndexes()]
+        if not indexes or not self.current_repo or not hasattr(self, "_selected_commit"):
             return
-        idx = selections[0]
+        idx = indexes[0]
         filepath = self._current_commit_files[idx]["path"]
         commit_hash = self._selected_commit["hash"]
 
         diff = git_service.get_commit_diff(self.current_repo, commit_hash, filepath)
-        self.show_diff(f"Commit {self._selected_commit['short_hash']} - Archivo: {filepath}\n\n" + diff)
+        self.txt_diff.setPlainText(
+            f"Commit {self._selected_commit['short_hash']} - Archivo: {filepath}\n\n" + diff
+        )
 
-    # Handlers para .gitignore
     def on_save_gitignore(self):
         if not self.current_repo:
             return
-        content = self.gitignore_textbox.get("1.0", tk.END)
+        content = self.input_gitignore.toPlainText()
         if git_service.save_gitignore_content(self.current_repo, content):
             self.refresh_status()
-            self.update_status("Archivo .gitignore guardado exitosamente.")
-            messagebox.showinfo("Guardado", "El archivo .gitignore se ha actualizado correctamente.")
-        else:
-            messagebox.showerror("Error", "No se pudo guardar el archivo .gitignore.")
+            self.statusBar().showMessage(".gitignore actualizado.")
+            QMessageBox.information(self, "Guardado", "El archivo .gitignore se guardó correctamente.")
 
-    def show_diff(self, text: str):
-        self.diff_textbox.delete("1.0", tk.END)
-
-        # Configurar etiquetas de color y formato para el diff en el widget de texto interno
-        internal_textbox = self.diff_textbox._textbox
-        internal_textbox.tag_config("diff_add", foreground="#28a745")       # Verde para adiciones
-        internal_textbox.tag_config("diff_remove", foreground="#dc3545")    # Rojo para eliminaciones
-        internal_textbox.tag_config("diff_header", foreground="#17a2b8")    # Cyan para cabeceras @@
-        internal_textbox.tag_config("diff_meta", foreground="#ffc107")      # Amarillo para metadatos
-        internal_textbox.tag_config("diff_bold_meta", foreground="#ffc107", font=("Courier", 13, "bold")) # Amarillo y Negrita para Autor, Fecha, Mensaje, Commit
-
-        lines = text.splitlines(keepends=True)
-        for line in lines:
-            line_start = self.diff_textbox.index("insert")
-            self.diff_textbox.insert(tk.END, line)
-            line_end = self.diff_textbox.index("insert")
-
-            if line.startswith("Autor:") or line.startswith("Fecha:") or line.startswith("Mensaje:") or line.startswith("Descripción:") or line.startswith("Commit ") or line.startswith("Cambios no preparados:") or line.startswith("Cambios preparados"):
-                internal_textbox.tag_add("diff_bold_meta", line_start, line_end)
-            elif line.startswith("+") and not line.startswith("+++"):
-                internal_textbox.tag_add("diff_add", line_start, line_end)
-            elif line.startswith("-") and not line.startswith("---"):
-                internal_textbox.tag_add("diff_remove", line_start, line_end)
-            elif line.startswith("@@"):
-                internal_textbox.tag_add("diff_header", line_start, line_end)
-            elif line.startswith("diff --git") or line.startswith("index ") or line.startswith("---") or line.startswith("+++"):
-                internal_textbox.tag_add("diff_meta", line_start, line_end)
 
 if __name__ == "__main__":
-    app = GitGuiApp()
-    app.mainloop()
+    app = QApplication(sys.argv)
+    window = GitGuiPySideApp()
+    window.show()
+    sys.exit(app.exec())
