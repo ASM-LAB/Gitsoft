@@ -1,6 +1,15 @@
-# Gestor de Repositorio Git (Python CustomTkinter)
+# Gestor de Repositorio Git (PySide6 + PyGit2)
 
-Una aplicación gráfica (GUI) moderna y sencilla desarrollada en Python utilizando **CustomTkinter** para gestionar repositorios Git de forma visual y rápida.
+Una aplicación gráfica (GUI) moderna, ultra rápida y ligera desarrollada en Python utilizando **PySide6 (Qt 6)** y **PyGit2 (libgit2)** para gestionar repositorios Git de forma visual y de alto rendimiento.
+
+---
+
+## ⚡ Cambios Técnicos y Arquitectura
+
+- **Motor Git Ultra Rápido (`PyGit2`):** Utiliza las vinculaciones nativas en C de `libgit2` para leer objetos, commits, estados y calcular diffs directamente en memoria sin cuellos de botella por creación de subprocesos en Windows.
+- **Interfaz Gráfica Moderna (`PySide6`):** Desarrollada sobre Qt 6 con estilo oscuro *Fusion*, fuentes legibles de 14pt en listados y panel de vista previa con resaltado de sintaxis (`QSyntaxHighlighter`).
+- **Estructuración de Datos sin Duplicados:** Salida limpia que discrimina claramente entre el **Título/Mensaje** del commit (1ª línea) y la **Descripción detallada** (a partir de la 3ª línea) en la consulta de historial y cambios.
+- **Respaldo de Versión Anterior:** La versión previa basada en `CustomTkinter` se encuentra guardada como respaldo en la carpeta `backup_customtkinter/`.
 
 ---
 
@@ -32,16 +41,16 @@ Una aplicación gráfica (GUI) moderna y sencilla desarrollada en Python utiliza
 
 ### Instalación de Dependencias
 
-Clona o descarga este repositorio y ejecuta:
+Ejecuta en tu terminal:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-O instala las librerías manualmente:
+O instala las librerías manualmente con `pip`:
 
 ```bash
-pip install customtkinter pillow
+pip install PySide6 pygit2 pillow
 ```
 
 ---
@@ -54,12 +63,17 @@ Ejecuta el archivo principal:
 python main.py
 ```
 
-### Flujo de trabajo rápido:
-1. Haz clic en **Abrir Repositorio** o selecciona uno reciente en el desplegable superior.
-2. En la pestaña **Área de Trabajo**, selecciona los archivos modificados y presiona **Preparar (Stage)**.
-3. Ingresa el **Mensaje/Título** y la **Descripción detallada** en la sección inferior.
-4. Presiona **Crear Commit**.
-5. Revisa el resultado en la pestaña **Historial de Commits** y consulta el código modificado en el panel lateral de **Vista Previa (Diff)**.
+---
+
+## 📦 Compilación en un Único Archivo Ejecutable (.exe)
+
+Para compilar la aplicación en un solo archivo ejecutable autónomo en Windows, instala `pyinstaller` y ejecuta el siguiente comando:
+
+```bash
+python -m PyInstaller --noconfirm --onefile --windowed --collect-all PySide6 --collect-all pygit2 main.py
+```
+
+El ejecutable resultante se creará en la carpeta `dist/main.exe`.
 
 ---
 
@@ -69,32 +83,4 @@ Para ejecutar las pruebas automáticas del servicio de Git:
 
 ```bash
 python -m unittest test_git_service.py
-```
-
----
-
-## ⚡ Optimización de Compilación con PyInstaller
-
-Si ejecutas `pyinstaller --onefile`, la aplicación tardará varios segundos en arrancar. Esto se debe a que el modo `--onefile` descomprime todos los componentes, assets de `customtkinter` y librerías en una carpeta temporal (`_MEIxxxxxx`) en el disco **cada vez que se abre el ejecutable**.
-
-### Opciones para Acelerar la Ejecución:
-
-#### 1. Usar el modo directorio `--onedir` (RECOMENDADO para máxima velocidad)
-El modo en directorio no requiere descomprimir archivos al arrancar, por lo que la aplicación **inicia instantáneamente**:
-
-```bash
-pyinstaller --onedir --noconsole --collect-all customtkinter main.py
-```
-*(Genera una carpeta `dist/main/` que contiene el ejecutable `main` y sus dependencias preparadas para ejecución inmediata).*
-
-#### 2. Excluir módulos innecesarios de la compilación
-Si deseas mantener `--onefile`, puedes acelerar la descompresión excluyendo módulos pesados que no se utilizan:
-
-```bash
-pyinstaller --onefile --noconsole --collect-all customtkinter --exclude-module matplotlib --exclude-module numpy --exclude-module scipy --exclude-module pandas main.py
-```
-
-#### 3. Crear ejecutable optimizado con `--onedir` mediante Spec o Script de Compilación
-```bash
-pyinstaller --noconfirm --onedir --windowed --add-data "$(python -c 'import customtkinter; print(customtkinter.__path__[0])'):customtkinter/" main.py
 ```
