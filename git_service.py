@@ -6,19 +6,31 @@ from typing import List, Dict, Any, Optional
 
 CONFIG_FILE = os.path.expanduser("~/.pygit_gui_config.json")
 
-def load_recent_repos() -> List[str]:
-    """Carga la lista de repositorios recientes guardados."""
+def load_config() -> Dict[str, Any]:
+    """Carga la configuración guardada del archivo de preferencias."""
     if not os.path.exists(CONFIG_FILE):
-        return []
+        return {"recent_repos": [], "last_repo": None}
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return [path for path in data.get("recent_repos", []) if os.path.isdir(path)]
+            recent = [path for path in data.get("recent_repos", []) if os.path.isdir(path)]
+            last_repo = data.get("last_repo")
+            if last_repo and not os.path.isdir(last_repo):
+                last_repo = None
+            return {"recent_repos": recent, "last_repo": last_repo}
     except Exception:
-        return []
+        return {"recent_repos": [], "last_repo": None}
+
+def load_recent_repos() -> List[str]:
+    """Carga la lista de repositorios recientes guardados."""
+    return load_config().get("recent_repos", [])
+
+def load_last_repo() -> Optional[str]:
+    """Obtiene el último repositorio seleccionado por el usuario."""
+    return load_config().get("last_repo")
 
 def save_recent_repo(repo_path: str) -> List[str]:
-    """Guarda un repositorio en la lista de recientes y retorna la lista actualizada."""
+    """Guarda un repositorio como el último usado y en la lista de recientes."""
     repo_path = os.path.abspath(repo_path)
     recent = load_recent_repos()
     if repo_path in recent:
@@ -28,7 +40,10 @@ def save_recent_repo(repo_path: str) -> List[str]:
 
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump({"recent_repos": recent}, f, indent=2, ensure_ascii=False)
+            json.dump({
+                "recent_repos": recent,
+                "last_repo": repo_path
+            }, f, indent=2, ensure_ascii=False)
     except Exception:
         pass
     return recent

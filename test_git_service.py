@@ -76,10 +76,12 @@ class TestGitService(unittest.TestCase):
         self.assertEqual(files[0]["path"], "file1.txt")
 
     def test_recent_repos_save_load(self):
-        # Probar guardado y carga de repositorios recientes
+        # Probar guardado y carga de repositorios recientes y último repositorio usado
         git_service.save_recent_repo(self.temp_dir)
         recent = git_service.load_recent_repos()
+        last = git_service.load_last_repo()
         self.assertIn(os.path.abspath(self.temp_dir), recent)
+        self.assertEqual(os.path.abspath(self.temp_dir), last)
 
 if __name__ == "__main__":
     unittest.main()

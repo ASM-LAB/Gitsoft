@@ -68,9 +68,13 @@ class GitGuiPySideApp(QMainWindow):
         self._apply_dark_theme()
         self._init_ui()
 
-        # Cargar directorio por defecto
+        # Cargar por defecto el último repositorio usado
+        last_repo = git_service.load_last_repo()
         default_dir = os.getcwd()
-        if git_service.is_git_repo(default_dir):
+
+        if last_repo and git_service.is_git_repo(last_repo):
+            self.set_repository(last_repo)
+        elif git_service.is_git_repo(default_dir):
             self.set_repository(default_dir)
         elif self.recent_repos:
             self.set_repository(self.recent_repos[0])
@@ -216,7 +220,7 @@ class GitGuiPySideApp(QMainWindow):
         lbl_c_msg = QLabel("Mensaje / Título (1ª línea):")
         commit_layout.addWidget(lbl_c_msg)
         self.input_commit_msg = QLineEdit()
-        self.input_commit_msg.setPlaceholder_text = "Escribe el título corto del commit..."
+        self.input_commit_msg.setPlaceholderText("Escribe el título corto del commit...")
         commit_layout.addWidget(self.input_commit_msg)
 
         lbl_c_desc = QLabel("Descripción detallada (a partir de la 3ª línea):")
