@@ -504,7 +504,8 @@ def create_splash_pixmap():
 
     # Estado
     painter.setPen(QColor("#007acc"))
-    font_status = QFont("Segoe UI", 9, QFont.Italic)
+    font_status = QFont("Segoe UI", 9)
+    font_status.setItalic(True)
     painter.setFont(font_status)
     painter.drawText(20, 175, "Iniciando aplicación...")
 
