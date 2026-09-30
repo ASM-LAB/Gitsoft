@@ -3,12 +3,12 @@ import os
 from typing import Optional, List, Dict
 
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QColor, QTextCharFormat, QSyntaxHighlighter, QPalette
+from PySide6.QtGui import QFont, QColor, QTextCharFormat, QSyntaxHighlighter, QPalette, QPixmap, QPainter
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QListWidget, QListWidgetItem, QPushButton, QComboBox,
     QLabel, QLineEdit, QTextEdit, QSplitter, QMessageBox, QFileDialog,
-    QFrame, QStatusBar, QGroupBox
+    QFrame, QStatusBar, QGroupBox, QSplashScreen
 )
 
 import git_service
@@ -480,8 +480,55 @@ class GitGuiPySideApp(QMainWindow):
             QMessageBox.information(self, "Guardado", "El archivo .gitignore se guardó correctamente.")
 
 
+def create_splash_pixmap():
+    """Crea una imagen elegante para la pantalla de carga (Splash Screen)."""
+    pixmap = QPixmap(420, 220)
+    pixmap.fill(QColor("#1e1e1e"))
+    painter = QPainter(pixmap)
+
+    # Borde
+    painter.setPen(QColor("#007acc"))
+    painter.drawRect(0, 0, 419, 219)
+
+    # Título
+    painter.setPen(QColor("#ffffff"))
+    font_title = QFont("Segoe UI", 16, QFont.Bold)
+    painter.setFont(font_title)
+    painter.drawText(20, 70, "Gestor de Repositorio Git")
+
+    # Subtítulo / Tecnología
+    painter.setPen(QColor("#cccccc"))
+    font_sub = QFont("Segoe UI", 11)
+    painter.setFont(font_sub)
+    painter.drawText(20, 105, "Cargando componentes y PyGit2...")
+
+    # Estado
+    painter.setPen(QColor("#007acc"))
+    font_status = QFont("Segoe UI", 9, QFont.Italic)
+    painter.setFont(font_status)
+    painter.drawText(20, 175, "Iniciando aplicación...")
+
+    painter.end()
+    return pixmap
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+
+    # Mostrar Splash Screen inmediatamente
+    splash = QSplashScreen(create_splash_pixmap(), Qt.WindowStaysOnTopHint)
+    splash.show()
+    app.processEvents()
+
+    # Cerrar el splash screen nativo de PyInstaller si se está usando
+    try:
+        import pyi_splash
+        pyi_splash.close()
+    except ImportError:
+        pass
+
     window = GitGuiPySideApp()
     window.show()
+    splash.finish(window)
+
     sys.exit(app.exec())
