@@ -65,15 +65,19 @@ python main.py
 
 ---
 
-## 📦 Compilación en un Único Archivo Ejecutable (.exe)
+## 📦 Compilación Optimizada para Arranque Ultra Rápido (.exe)
 
-Para compilar la aplicación en un solo archivo ejecutable autónomo en Windows, instala `pyinstaller` y ejecuta el siguiente comando:
+Para obtener un arranque instantáneo (en lugar del retraso de descomprimir archivos temporales con `--onefile`), la aplicación está configurada para compilarse en modo carpeta de distribución (`--onedir`) excluyendo los módulos innecesarios de PySide6 (como QtWebEngine, Qt3D, QtQuick, etc.).
+
+Para compilar la aplicación, instala `pyinstaller` y ejecuta:
 
 ```bash
-python -m PyInstaller --noconfirm --onefile --windowed --collect-all PySide6 --collect-all pygit2 main.py
+python -m PyInstaller --noconfirm main.spec
 ```
 
-El ejecutable resultante se creará en la carpeta `dist/main.exe`.
+El ejecutable optimizado y sus librerías asociadas se crearán en la carpeta `dist/GestorGitGUI/GestorGitGUI.exe`.
+
+> **Nota:** Al usar el ejecutable, se mostrará una pantalla de carga (*Splash Screen*) mientras se inicializa la aplicación.
 
 ---
 
